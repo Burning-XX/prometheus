@@ -1,10 +1,10 @@
 """
-   ___                            _        _   _                   _                                        _          
-  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___ 
+   ___                            _        _   _                   _                                        _
+  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___
  / /  / _ \| '_ ` _ \| '_ \| | | | __/ _` | __| |/ _ \| '_ \ / _` | |  / _ \/ __/ _ \| '_ \ / _ \| '_ ` _ \| |/ __/ __|
 / /__| (_) | | | | | | |_) | |_| | || (_| | |_| | (_) | | | | (_| | | |  __/ (_| (_) | | | | (_) | | | | | | | (__\__ \
 \____/\___/|_| |_| |_| .__/ \__,_|\__\__,_|\__|_|\___/|_| |_|\__,_|_|  \___|\___\___/|_| |_|\___/|_| |_| |_|_|\___|___/
-                     |_|                                                                                               
+                     |_|
 
 计算经济学数据处理工具箱 API
 IMGC.PY
@@ -13,10 +13,14 @@ IMGC.PY
 数据读取
 数据写入
 
+本页作者:
+Aliebc (aliebcx@outlook.com)
 
+Copyright(C)2022 All Rights reserved.
 """
 
 import os
+import traceback
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from .ce import ret2,ret_error,ret_success
 from .datac import heter_compare_df
@@ -72,7 +76,8 @@ def density(request:HttpRequest)->HttpResponse:
             height=int(request.GET.get('height',default=8))
         except Exception as e:
             return ret_error(e)
-        img_density=(ggplot(dta,aes(x=argu1))+geom_density()+ggtitle(title)+theme_classic())
+        #img_density=(ggplot(dta,aes(x=argu1))+geom_density()+ggtitle(title)+theme_classic())
+        img_density=(ggplot(dta,aes(x=argu1))+geom_density()+ggtitle(title)+theme(text=element_text(family='SimHei')))
         return sav_and_ret_svg(img_density,width,height,request)
     elif request.method =='POST':
         try:
@@ -83,7 +88,7 @@ def density(request:HttpRequest)->HttpResponse:
             height=int(request.POST.get('height',default=8))
         except Exception as e:
             return ret_error(e)
-        img_density=(ggplot(dta,aes(x=argu1))+geom_density()+ggtitle(title)+theme_classic())
+        img_density=(ggplot(dta,aes(x=argu1))+geom_density()+ggtitle(title)+theme_classic()+theme(text=element_text(family='SimHei')))
         return ret_success({'tuid':sav_svg(img_density,width,height)})
     else:
        return ret2(-1,None,'Method Not Allowed.')
@@ -156,7 +161,7 @@ def hetero_density(request:HttpRequest)->HttpResponse:
             return ret_error(e)
         try:
             dta2_h=heter_compare_df(dta,argu_type,float(segment))
-            img_density=(ggplot(dta2_h,aes(x=argu1,colour=argu_type+'_type'))+geom_density()+ggtitle(title)+theme_classic())
+            img_density=(ggplot(dta2_h,aes(x=argu1,colour=argu_type+'_type'))+geom_density()+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret_error(e)
         return sav_and_ret_svg(img_density,width,height,request)
@@ -176,7 +181,7 @@ def type_density(request:HttpRequest)->HttpResponse:
             height=int(request.GET.get('height',default=8))
         except Exception as e:
             return ret_error(e)
-        img_density=(ggplot(dta,aes(x=argu1,colour=argu2))+geom_density()+ggtitle(title))
+        img_density=(ggplot(dta,aes(x=argu1,colour=argu2))+geom_density()+ggtitle(title)+theme(text=element_text(family='SimHei')))
         return sav_and_ret_svg(img_density,width,height,request)
     elif request.method =='POST':
        return ret2(-1,None,'Method Not Allowed.')
@@ -199,7 +204,7 @@ def type_regress(request:HttpRequest)->HttpResponse:
             return ret_error(e)
         try:
             dta2=heter_compare_df(dta,argu_type,float(segment))
-            img_density=(ggplot(dta2,aes(x=argu1,y=argu2,colour=argu_type+'_type'))+geom_smooth(method='lm')+geom_point()+ggtitle(title))
+            img_density=(ggplot(dta2,aes(x=argu1,y=argu2,colour=argu_type+'_type'))+geom_smooth(method='lm')+geom_point()+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret_error(e)
         return sav_and_ret_svg(img_density,width,height,request)
@@ -220,7 +225,7 @@ def two_reg(request:HttpRequest)->HttpResponse:
         except Exception as e:
             return ret_error(e)
         try:
-            img_density=(ggplot(dta,aes(x=argu1,y=argu2))+geom_smooth(method='lm')+geom_point(fill='blue')+ggtitle(title))
+            img_density=(ggplot(dta,aes(x=argu1,y=argu2))+geom_smooth(method='lm')+geom_point(fill='blue')+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret_error(e)
         return sav_and_ret_svg(img_density,width,height,request)
@@ -241,7 +246,7 @@ def two_reg_d2(request:HttpRequest)->HttpResponse:
         except Exception as e:
             return ret_error(e)
         try:
-            img_density=(ggplot(dta,aes(x=argu1,y=argu2))+geom_smooth(method='lm',formula='y~pow(x,2)+x')+geom_point(fill='blue')+ggtitle(title))
+            img_density=(ggplot(dta,aes(x=argu1,y=argu2))+geom_smooth(method='lm',formula='y~pow(x,2)+x')+geom_point(fill='blue')+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret_error(e)
         return sav_and_ret_svg(img_density,width,height,request)
@@ -263,7 +268,7 @@ def two_line(request:HttpRequest)->HttpResponse:
             return ret_error(e)
         try:
             dta4=dta.groupby(argu2).mean(argu1).reset_index()
-            img_density=(ggplot(dta4,aes(x=argu2,y=argu1))+geom_line()+geom_point(fill='blue')+ggtitle(title))
+            img_density=(ggplot(dta4,aes(x=argu2,y=argu1))+geom_line()+geom_point(fill='blue')+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret_error(e)
         return sav_and_ret_svg(img_density,width,height,request)
@@ -291,7 +296,7 @@ def type_bar(request:HttpRequest)->HttpResponse:
         dta4['errbar_min']=t.interval(0.95,dta4['argu1_len']-1,dta4['argu1_mean'],dta4['argu1_std'])[0]
         dta4['errbar_max']=t.interval(0.95,dta4['argu1_len']-1,dta4['argu1_mean'],dta4['argu1_std'])[1]
         dta4[argu1]=dta4['argu1_mean']
-        img_density=(ggplot(dta4,aes(x=argu2,y=argu1,fill=argu2))+geom_bar(stat = 'identity')+geom_errorbar(aes(ymax='errbar_max',ymin='errbar_min'))+ggtitle(title))
+        img_density=(ggplot(dta4,aes(x=argu2,y=argu1,fill=argu2))+geom_bar(stat = 'identity')+geom_errorbar(aes(ymax='errbar_max',ymin='errbar_min'))+ggtitle(title)+theme(text=element_text(family='SimHei')))
         return sav_and_ret_svg(img_density,width,height,request)
     elif request.method =='POST':
         ret2(-1,None,'Method Not Allowed.')
@@ -312,7 +317,7 @@ def qqplot(request):
         except Exception as e:
             return ret2(-1,None,'Error(#3):Request.')
         try:
-            img_density=(ggplot(dta,aes(sample=argu1))+stat_qq()+stat_qq_line()+ggtitle(title))
+            img_density=(ggplot(dta,aes(sample=argu1))+stat_qq()+stat_qq_line()+ggtitle(title)+theme(text=element_text(family='SimHei')))
         except Exception as e:
             return ret2(-1,None,'Error(#4):Plot.')
         return sav_and_ret_svg(img_density,width,height,request)

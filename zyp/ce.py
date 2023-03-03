@@ -1,16 +1,19 @@
 """
-   ___                            _        _   _                   _                                        _          
-  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___ 
+   ___                            _        _   _                   _                                        _
+  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___
  / /  / _ \| '_ ` _ \| '_ \| | | | __/ _` | __| |/ _ \| '_ \ / _` | |  / _ \/ __/ _ \| '_ \ / _ \| '_ ` _ \| |/ __/ __|
 / /__| (_) | | | | | | |_) | |_| | || (_| | |_| | (_) | | | | (_| | | |  __/ (_| (_) | | | | (_) | | | | | | | (__\__ \
 \____/\___/|_| |_| |_| .__/ \__,_|\__\__,_|\__|_|\___/|_| |_|\__,_|_|  \___|\___\___/|_| |_|\___/|_| |_| |_|_|\___|___/
-                     |_|                                                                                               
+                     |_|
 
 计算经济学数据处理工具箱 API
 CE.PY
 核心函数,包括返回处理、版本控制等
-CE: computational economics
 
+本页作者:
+Aliebc (aliebcx@outlook.com)
+
+Copyright(C)2022 All Rights reserved.
 """
 
 import json
@@ -64,6 +67,19 @@ def ret2(
         s_code=200
     else:
         s_code=200
+    return JsonResponse({
+        "respCode":code,
+        "respData":data,
+        "errMsg":err
+    },headers={
+        'CE-VERSION':ce_version_str
+    },status=s_code)
+
+def ret3(
+    code:int,
+    data:list,
+    err:str) -> JsonResponse:
+    s_code=int(200)
     return JsonResponse({
         "respCode":code,
         "respData":data,

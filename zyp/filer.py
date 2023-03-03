@@ -1,10 +1,10 @@
 """
-   ___                            _        _   _                   _                                        _          
-  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___ 
+   ___                            _        _   _                   _                                        _
+  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___
  / /  / _ \| '_ ` _ \| '_ \| | | | __/ _` | __| |/ _ \| '_ \ / _` | |  / _ \/ __/ _ \| '_ \ / _ \| '_ ` _ \| |/ __/ __|
 / /__| (_) | | | | | | |_) | |_| | || (_| | |_| | (_) | | | | (_| | | |  __/ (_| (_) | | | | (_) | | | | | | | (__\__ \
 \____/\___/|_| |_| |_| .__/ \__,_|\__\__,_|\__|_|\___/|_| |_|\__,_|_|  \___|\___\___/|_| |_|\___/|_| |_| |_|_|\___|___/
-                     |_|                                                                                               
+                     |_|
 
 计算经济学数据处理工具箱 API
 FILER.PY
@@ -13,14 +13,16 @@ FILER.PY
 数据读取
 数据写入
 
+本页作者:
+Aliebc (aliebcx@outlook.com)
 
+Copyright(C)2022 All Rights reserved.
 """
 
 import os
 import re
 import time
 import json
-import traceback
 import hashlib
 import pathlib
 import pandas as pd
@@ -28,6 +30,7 @@ import platform
 import threading
 import multiprocessing
 import gc
+import traceback
 from django.http import HttpResponse,HttpRequest, JsonResponse
 from .ce import CEOptions, request_analyse, ret2, ret_error, ret_success, CERunningError
 from .configure import file_conf
@@ -39,15 +42,11 @@ try:
     conf=file_conf
     file_dir_path=conf['file_path']
     image_path=conf['img_path']
-    print('----->')
-    print(file_dir_path)
-    print(image_path)
     if(os.path.isdir(file_dir_path) and os.path.isdir(image_path)):
         print('Load config file successfully!')
     else:
         raise CERunningError("Cannot open and load the config file!")
 except Exception as e:
-    traceback.print_exc()
     raise CERunningError("Cannot open and load the config file!")
 
 def generate_uid(m_name='md5')->str:
@@ -134,6 +133,7 @@ def get_file_data(request:HttpRequest)->pd.DataFrame:
         pread.start()
         pread.join()
         fd=get_file_data_src(request)
+        print('======')
     else:
         fd=get_file_data_src(request) #对Windows和MacOS使用普通的单进程处理
     return fd
@@ -143,7 +143,7 @@ def get_file_data_src(request:HttpRequest)->pd.DataFrame:
     内部获取数据表函数
     """
     global dtalist
-    if request.method in ['POST','GET']: 
+    if request.method in ['POST','GET']:
         if request.method=='POST':
             try:
                 rp=request_analyse(request)
@@ -159,7 +159,7 @@ def get_file_data_src(request:HttpRequest)->pd.DataFrame:
             except Exception as e:
                 raise CERunningError("Bad Request")
         if uid and f_suffix:
-            print("[CE-API LOG][%s]READ %s %s" % 
+            print("[CE-API LOG][%s]READ %s %s" %
             (time.strftime("%d/%m/%Y %H:%M:%S", time.localtime()),"d",uid))
             if uid in dtalist:
                 dtalist[uid]['time']=int(time.time())
@@ -182,7 +182,7 @@ def get_file_data_src(request:HttpRequest)->pd.DataFrame:
             except Exception as e:
                 raise CERunningError("Read Error") #文件不存在或读取格式错误导致读取失败
         else:
-            raise CERunningError("Incomplete arguments") #不完整的参数 
+            raise CERunningError("Incomplete arguments") #不完整的参数
     elif request.method=='OPTIONS':
         raise CEOptions("OPTIONS")
     else:
@@ -193,10 +193,15 @@ def getd(request:HttpRequest)->JsonResponse:
         fdata=get_file_data(request)
         if fdata.shape[0]>MAX_LINES: #最大返回值
             fdata=fdata.head(MAX_LINES)
+            print('-------')
+            print(fdata)
+            print('-------')
         return ret_success({
             "DataList":json.loads(fdata.to_json(orient='records')), #数据表转JSON
-            "Type":json.loads(fdata.dtypes.to_json())})
+            "Type":json.loads(fdata.dtypes.to_json(default_handler=str))})
     except Exception as e:
+        print('----error----')
+        traceback.print_exc()
         return ret_error(e)
 
 def ret_file(request:HttpRequest)->HttpResponse:

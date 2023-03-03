@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 """
-   ___                            _        _   _                   _                                        _          
-  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___ 
+   ___                            _        _   _                   _                                        _
+  / __\___  _ __ ___  _ __  _   _| |_ __ _| |_(_) ___  _ __   __ _| |   ___  ___ ___  _ __   ___  _ __ ___ (_) ___ ___
  / /  / _ \| '_ ` _ \| '_ \| | | | __/ _` | __| |/ _ \| '_ \ / _` | |  / _ \/ __/ _ \| '_ \ / _ \| '_ ` _ \| |/ __/ __|
 / /__| (_) | | | | | | |_) | |_| | || (_| | |_| | (_) | | | | (_| | | |  __/ (_| (_) | | | | (_) | | | | | | | (__\__ \
 \____/\___/|_| |_| |_| .__/ \__,_|\__\__,_|\__|_|\___/|_| |_|\__,_|_|  \___|\___\___/|_| |_|\___/|_| |_| |_|_|\___|___/
-                     |_|                                                                                               
+                     |_|
 
 计算经济学数据处理工具箱 API
 
@@ -20,36 +20,26 @@
 
 调试环境默认情况下被开启,正式部署时请关闭调试模式
 
-指导者:
-Tracy Xiao Liu
-Shu Wang
-
-开发者/贡献者:
-Aliebc (aliebcx@outlook.com)
-Andy (andytsangyuklun@gmail.com)
-Jingwei Luo
-Kai Bian
-Xiaolong Yuan
-Yang He
-Zihan Wang
-
 使用如下python开源项目:
 Numpy
-Scipy 
-Pandas 
-openpyxl 
-xlrd 
-xlwt 
-Django 
-plotnine 
-matplotlib 
-sklearn 
-pandasql 
+Scipy
+Pandas
+openpyxl
+xlrd
+xlwt
+Django
+plotnine
+matplotlib
+sklearn
+pandasql
 linearmodels
+
+Copyright(C)2022 All Rights reserved.
 """
 import os
 import sys
 import traceback
+
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zyp.settings')

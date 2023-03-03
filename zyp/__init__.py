@@ -19,19 +19,6 @@
 
 调试环境默认情况下被开启,正式部署时请关闭调试模式
 
-指导者:
-Tracy Xiao Liu
-Shu Wang
-
-开发者/贡献者:
-Aliebc Xiang (aliebcx@outlook.com)
-Andy (andytsangyuklun@gmail.com)
-Jingwei Luo
-Kai Bian
-Xiaolong Yuan
-Yang He
-Zihan Wang
-
 使用如下python开源项目:
 Numpy
 Scipy 
