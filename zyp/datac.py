@@ -167,7 +167,7 @@ def xsummary3(request: HttpRequest) -> JsonResponse:
             result.append(
                 [key, a2[key]['count'], a2[key]['mean'], a2[key]['std'], a2[key]['min'], a2[key]['max'], a2[key]['25%'],
                  a2[key]['50%'], a2[key]['75%']])
-        return ret3(0, result, None)
+        return ret_success({'ValueList': result, 'File': {'uid': uid, 'f_suffix': '.xlsx'}})
     except Exception as e:
         traceback.print_exc()
         return ret_error(e)
@@ -688,6 +688,21 @@ def g_p_str(pval) -> str:
     else:
         return ""
 
+def convert(ret_dict) -> dict:
+    result = {}
+    list = ['被解释变量', 'const', '观测值', 'R^2']
+    for key in ret_dict:
+        map = ret_dict[key]
+        v = {}
+        v['被解释变量'] = map["被解释变量"]
+        v['常数项'] = map['const']
+        for k in map:
+            if k not in list:
+                v[k] = map[k]
+        v['观测值'] = map['观测值']
+        v['R2'] = map['R^2']
+        result[key] = v
+    return result
 
 def smols2excel(ols_res_dict: dict) -> pd.DataFrame:
     """
@@ -701,8 +716,9 @@ def smols2excel(ols_res_dict: dict) -> pd.DataFrame:
         for key in ArgList:
             if key in ols_res_dict['OLSList'][i]['Result']['coeff']:
                 p_str = g_p_str(ols_res_dict['OLSList'][i]['Result']['pvalue'][key])
+                temp = '(' + str(round(ols_res_dict['OLSList'][i]['Result']['std_err'][key], 3)) + ')'
                 ret_dict['(' + str(i + 1) + ')'][key] = str(
-                    round(ols_res_dict['OLSList'][i]['Result']['coeff'][key], 3)) + p_str  # 拼接显著性标记
+                    round(ols_res_dict['OLSList'][i]['Result']['coeff'][key], 3)) + p_str + '\n' + temp  # 拼接显著性标记和标准误
             else:
                 ret_dict['(' + str(i + 1) + ')'][key] = ""
         if 'entity_effect' in ols_res_dict['OLSList'][i]['Result']:  # 把剩下的项目加入这个文件
@@ -710,9 +726,60 @@ def smols2excel(ols_res_dict: dict) -> pd.DataFrame:
             ret_dict['(' + str(i + 1) + ')']['个体固定效应'] = ols_res_dict['OLSList'][i]['Result']['time_effect']
         ret_dict['(' + str(i + 1) + ')']['观测值'] = str(ols_res_dict['OLSList'][i]['Result']['n'])
         ret_dict['(' + str(i + 1) + ')']['R^2'] = str(round(ols_res_dict['OLSList'][i]['Result']['r2'], 3))
-    ret_df = pd.DataFrame(ret_dict)
+    ret_df = pd.DataFrame(convert(ret_dict))
     return ret_df
 
+
+def smols2excelV2(ols_res_dict: dict) -> pd.DataFrame:
+    """
+    内部函数:把回归结果格式化处理到Excel
+    """
+    ret_list = []
+    first_column = []
+
+    ArgList = ols_res_dict['ArgeList']
+    ArgList.insert(0, "const")
+
+    for i in range(0, ols_res_dict['count']):  # 按个数循环
+        column = []
+        first_column_append(first_column, i, "")
+        column.append('(' + str(i + 1) + ')')
+        first_column_append(first_column, i, "被解释变量")
+        column.append(ols_res_dict['OLSList'][i]['argu_i'])
+
+        try:
+            for key in ArgList:
+                if key in ols_res_dict['OLSList'][i]['Result']['coeff']:
+                    p_str = g_p_str(ols_res_dict['OLSList'][i]['Result']['pvalue'][key])
+                    first_column_append(first_column, i, key)
+                    column.append(str(round(ols_res_dict['OLSList'][i]['Result']['coeff'][key], 3)) + p_str)
+                    temp = '(' + str(round(ols_res_dict['OLSList'][i]['Result']['std_err'][key], 3)) + ')'
+                    first_column_append(first_column, i, "")
+                    column.append(temp)
+                else:
+                    first_column_append(first_column, i, key)
+                    column.append("")
+                    first_column_append(first_column, i, "")
+                    column.append("")
+            if 'entity_effect' in ols_res_dict['OLSList'][i]['Result']:  # 把剩下的项目加入这个文件
+                first_column_append(first_column, i, '时间固定效应')
+                column.append(ols_res_dict['OLSList'][i]['Result']['entity_effect'])
+                first_column_append(first_column, i, '个体固定效应')
+                column.append(ols_res_dict['OLSList'][i]['Result']['time_effect'])
+            first_column_append(first_column, i, "观测值")
+            column.append(str(ols_res_dict['OLSList'][i]['Result']['n']))
+            first_column_append(first_column, i, "R^2")
+            column.append(str(round(ols_res_dict['OLSList'][i]['Result']['r2'], 3)))
+            if i == 0:
+                ret_list.append(first_column)
+            ret_list.append(column)
+        except Exception as e:
+            traceback.print_exc()
+    return pd.DataFrame(ret_list).T
+
+def first_column_append(ret_fist, i, name):
+    if i == 0:
+        ret_fist.append(name)
 
 def ols_effect_repeat(request: HttpRequest) -> JsonResponse:
     """
@@ -738,8 +805,8 @@ def ols_effect_repeat(request: HttpRequest) -> JsonResponse:
         ret_s = {"count": len(ols_res),  # 计数
                  "OLSList": ols_res,  # 被解释变量
                  "ArgeList": list(argu_el)}  # 参数的并集
-        ret_df = smols2excel(ret_s)
-        ret_uid = put_file_excel(ret_df, True)
+        ret_df = smols2excelV2(ret_s)
+        ret_uid = put_file_excel(ret_df, False)
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
         return ret_success(ret_s)
     except Exception as e:
@@ -768,8 +835,9 @@ def ols_repeat(request: HttpRequest) -> JsonResponse:
         ret_s = {"count": len(ols_res),  # 计数
                  "OLSList": ols_res,  # 回归结果
                  "ArgeList": list(argu_el)}  # 参数的并集
-        ret_df = smols2excel(ret_s)
-        ret_uid = put_file_excel(ret_df, True)  # 输出索引
+        # ret_df = smols2excel(ret_s)
+        ret_df = smols2excelV2(ret_s)
+        ret_uid = put_file_excel(ret_df, False)  # 输出索引
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
         return ret_success(ret_s)
     except Exception as e:
