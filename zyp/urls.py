@@ -79,6 +79,14 @@ urlpatterns = [
     ## Jing Wei Luo
     path('loss_test/', datac.loss_test),
     path('loss_delete/', datac.loss_delete),
+    path('data_log/', datac.data_log),
+    path('data_winsor/', datac.winsor_data),
+    path('dimg_box/', imgc.box_plot),
+    path('dimg_multi_box/', imgc.multi_box_plot),
+    path('probits/', datac.probit_repeat),
+    path('logits/', datac.logit_repeat),
+    path('probitse/', datac.probit_effect_repeat),
+    path('logitse/', datac.logit_repeat),
     path('var_filter/', datac.var_filter),
     ## End this part
 ]

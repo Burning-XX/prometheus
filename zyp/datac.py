@@ -28,6 +28,7 @@ import numpy as npy
 import scipy.stats as st
 import statsmodels.api as sm
 from linearmodels.panel import PanelOLS
+from scipy.stats.mstats import winsorize
 from sklearn import preprocessing
 import re
 import traceback
@@ -158,15 +159,22 @@ def xsummary3(request: HttpRequest) -> JsonResponse:
         for key in argu1:
             r2 = dta[key]
             if not r2.dtype == 'object':
-                a2[key] = json.loads(r2.describe().to_json())
+                desc = r2.describe()
+                skew = r2.skew()
+                kurt = r2.kurt()
+                list = [desc, pd.Series({"skew": skew}), pd.Series({"kurt": kurt})]
+                desc = pd.concat(list)
+                a2[key] = json.loads(desc.to_json())
         df2 = pd.read_json(json.dumps(a2), orient="index")
         uid = put_file_excel(df2, True, "Variable")
         result = []
-        result.append(['变量名', 'count', 'mean', 'std', 'min', 'max', '25%', '50%', '75%'])
+        result.append(['变量名', 'count', 'mean', 'std', 'min', 'max', '25%', '50%', '75%', 'skew', 'kurt'])
         for key in argu1:
-            result.append(
-                [key, a2[key]['count'], a2[key]['mean'], a2[key]['std'], a2[key]['min'], a2[key]['max'], a2[key]['25%'],
-                 a2[key]['50%'], a2[key]['75%']])
+            if a2.__contains__(key):
+                result.append(
+                    [key, a2[key]['count'], a2[key]['mean'], a2[key]['std'], a2[key]['min'], a2[key]['max'],
+                     a2[key]['25%'],
+                     a2[key]['50%'], a2[key]['75%'], a2[key]['skew'], a2[key]['kurt']])
         return ret_success({'ValueList': result, 'File': {'uid': uid, 'f_suffix': '.xlsx'}})
     except Exception as e:
         traceback.print_exc()
@@ -278,6 +286,52 @@ def ols(request):
         "s_text": re.sub(r"Notes(.|\n)*", "", str(y))
     })
 
+#新加——对数化操作
+def data2log(data):
+    """
+    返回一个在非负数值域的数值x的对数：ln(1+x)
+    """
+    ln = npy.log(1+data)
+    if not ln>=0:
+        return "负数无法对数化"
+    else:
+        return ln
+def data_log(request):
+    try:
+        dta = get_file_data(request)
+        xe = json.loads(request.body)
+        argu1 = xe['argu1']
+        f_suffix = xe['f_suffix']
+        for label in argu1:
+            dta[label] = dta[label].apply(data2log)
+
+        uid = put_file(dta, f_suffix)
+        return ret_success(
+            {"uid": uid, "f_suffix": f_suffix, "Datalist": json.loads(dta.to_json(orient='index'))})
+    except Exception as e:
+        return ret_error(e)
+
+def winsor(dataList,down=1,up=1): #默认上下均为1%缩尾，dataList是一列，即dataframce中的一列
+    """
+    将传入的列表数据进行缩尾处理（替换观测值而不是删除）
+    """
+    winsored = winsorize(dataList,limits=[down/100,up/100])
+    return winsored.data
+def winsor_data(request):
+    try:
+        dta = get_file_data(request)
+        xe = json.loads(request.body)
+        argu1 = xe['argu1']
+        f_suffix = xe['f_suffix']
+        for label in argu1:
+            dta[label] = winsor(npy.array(dta[label]),1,1)
+
+        uid = put_file(dta, f_suffix)
+        return ret_success(
+            {"uid": uid, "f_suffix": f_suffix, "Datalist": json.loads(dta.to_json(orient='index'))})
+    except Exception as e:
+        traceback.print_exc()
+        return ret_error(e)
 
 def binary_probit(request):
     try:
@@ -738,7 +792,7 @@ def smols2excelV2(ols_res_dict: dict) -> pd.DataFrame:
     first_column = []
 
     ArgList = ols_res_dict['ArgeList']
-    ArgList.insert(0, "const")
+    ArgList.append('const')
 
     for i in range(0, ols_res_dict['count']):  # 按个数循环
         column = []
@@ -770,6 +824,48 @@ def smols2excelV2(ols_res_dict: dict) -> pd.DataFrame:
             column.append(str(ols_res_dict['OLSList'][i]['Result']['n']))
             first_column_append(first_column, i, "R^2")
             column.append(str(round(ols_res_dict['OLSList'][i]['Result']['r2'], 3)))
+            if i == 0:
+                ret_list.append(first_column)
+            ret_list.append(column)
+        except Exception as e:
+            traceback.print_exc()
+    return pd.DataFrame(ret_list).T
+
+def smols2excelV3(ols_res_dict: dict) -> pd.DataFrame:
+    ret_list = []
+    first_column = []
+
+    ArgList = ols_res_dict['ArgeList']
+    ArgList.append('const')
+
+    for i in range(0, ols_res_dict['count']):  # 按个数循环
+        column = []
+        first_column_append(first_column, i, "")
+        column.append('(' + str(i + 1) + ')')
+        first_column_append(first_column, i, "被解释变量")
+        column.append(ols_res_dict['OLSList'][i]['argu_i'])
+
+        try:
+            for key in ArgList:
+                if key in ols_res_dict['OLSList'][i]['Result']['coeff']:
+                    p_str = g_p_str(ols_res_dict['OLSList'][i]['Result']['pvalue'][key])
+                    first_column_append(first_column, i, key)
+                    column.append(str(round(ols_res_dict['OLSList'][i]['Result']['coeff'][key], 3)) + p_str)
+                    temp = '(' + str(round(ols_res_dict['OLSList'][i]['Result']['std_err'][key], 3)) + ')'
+                    first_column_append(first_column, i, "")
+                    column.append(temp)
+                else:
+                    first_column_append(first_column, i, key)
+                    column.append("")
+                    first_column_append(first_column, i, "")
+                    column.append("")
+            if 'entity_effect' in ols_res_dict['OLSList'][i]['Result']:  # 把剩下的项目加入这个文件
+                first_column_append(first_column, i, '时间固定效应')
+                column.append(ols_res_dict['OLSList'][i]['Result']['entity_effect'])
+                first_column_append(first_column, i, '个体固定效应')
+                column.append(ols_res_dict['OLSList'][i]['Result']['time_effect'])
+            first_column_append(first_column, i, "观测值")
+            column.append(str(ols_res_dict['OLSList'][i]['Result']['n']))
             if i == 0:
                 ret_list.append(first_column)
             ret_list.append(column)
@@ -843,3 +939,199 @@ def ols_repeat(request: HttpRequest) -> JsonResponse:
     except Exception as e:
         traceback.print_exc()
         return ret_error(e)
+
+def logit(dta, argu1, argu2):
+    label_encoder = preprocessing.LabelEncoder()
+    y = label_encoder.fit_transform(dta[argu2])
+    x = sm.add_constant(dta[argu1])
+    model = sm.Logit(y, x)
+    results = model.fit()
+
+    pvalue = results.pvalues
+    coeff = results.params
+    std_err = results.bse
+    #r2 = results.rsquared
+    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
+        "pvalue": pvalue,
+        "coeff": coeff,
+        "std_err": std_err,
+    })
+    res_js = json.loads(res_df.to_json())
+    res_js['n'] = dta.shape[0]
+    #res_js['r2'] = r2
+    # print({"argu_i": argu2, "Result": res_js})
+    return {"argu_i": argu2, "Result": res_js}
+
+def effect_logit(dta, argu1, argu2, entity_effects, time_effects):
+    label_encoder = preprocessing.LabelEncoder()
+    y = label_encoder.fit_transform(dta[argu2])
+    x = sm.add_constant(dta[argu1])
+    mod = PanelOLS(y, x, entity_effects=entity_effects, time_effects=time_effects)
+    results = mod.fit()
+
+    pvalue = results.pvalues
+    coeff = results.params
+    std_err = results.std_errors
+    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
+        "pvalue": pvalue,
+        "coeff": coeff,
+        "std_err": std_err,
+    })
+    res_js = json.loads(res_df.to_json())
+    res_js['time_effect'] = time_effects
+    res_js['entity_effect'] = entity_effects
+    res_js['n'] = dta.shape[0]
+    return {"argu_i": argu2, "Result": res_js}
+
+def logit_repeat(request: HttpRequest) -> JsonResponse:
+    try:
+        args = request_analyse(request)
+        dta = get_file_data(request)
+        count = args['argu1']['count']
+        logit_args = args['argu1']['argus']
+        logit_result = []
+        argu_il = set(logit_args[0]['argu_i'])
+        argu_el = set(logit_args[0]['argu_e'])
+        for i in range(0, count):
+            logit_result.append(logit(dta,
+                                           logit_args[i]['argu_e'],
+                                           logit_args[i]['argu_i']))
+            argu_il = argu_il.union(logit_args[i]['argu_i'])
+            argu_el = argu_el.union(logit_args[i]['argu_e'])
+        ret_s = {"count": len(logit_result),  # 计数
+                 "OLSList": logit_result,  # 回归结果
+                 "ArgeList": list(argu_el)}  # 参数的并集
+        ret_df = smols2excelV3(ret_s)
+        ret_uid = put_file_excel(ret_df, False)  # 输出索引
+        ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
+        return ret_success(ret_s)
+    except Exception as e:
+        traceback.print_exc()
+        return ret_error(e)
+
+def logit_effect_repeat(request: HttpRequest) -> JsonResponse:
+    try:
+        args = request_analyse(request)
+        dta = get_file_data(request)
+        count = args['argu1']['count']
+        logit_args = args['argu1']['argus']
+        dta = dta.set_index(args['argu1']['argue'])
+        logit_result = []
+        argu_il = set(logit_args[0]['argu_i'])
+        argu_el = set(logit_args[0]['argu_e'])
+        for i in range(0, count):
+            logit_result.append(effect_probit(dta,
+                                               logit_args[i]['argu_e'],
+                                               logit_args[i]['argu_i'],
+                                               logit_args[i]['entity_effect'],  # 个体固定效应(Bool)
+                                               logit_args[i]['time_effect']  # 时间固定效应
+                                               ))
+            argu_il = argu_il.union(logit_args[i]['argu_i'])
+            argu_el = argu_el.union(logit_args[i]['argu_e'])
+        ret_s = {"count": len(logit_result),  # 计数
+                 "OLSList": logit_result,  # 被解释变量
+                 "ArgeList": list(argu_el)}  # 参数的并集
+        ret_df = smols2excelV3(ret_s)
+        ret_uid = put_file_excel(ret_df, False)
+        ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
+        return ret_success(ret_s)
+    except Exception as e:
+        traceback.print_exc()
+        return ret_error(e)
+
+def probit(dta, argu1, argu2):
+    label_encoder = preprocessing.LabelEncoder()
+    y = label_encoder.fit_transform(dta[argu2])
+    x = sm.add_constant(dta[argu1])
+    model = sm.Probit(y, x)
+    results = model.fit()
+
+    pvalue = results.pvalues
+    coeff = results.params
+    std_err = results.bse
+    # r2 = results.rsquared
+    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
+        "pvalue": pvalue,
+        "coeff": coeff,
+        "std_err": std_err,
+    })
+    res_js = json.loads(res_df.to_json())
+    res_js['n'] = dta.shape[0]
+    return {"argu_i": argu2, "Result": res_js}
+
+def effect_probit(dta, argu1, argu2, entity_effects, time_effects):
+    label_encoder = preprocessing.LabelEncoder()
+    y = label_encoder.fit_transform(dta[argu2])
+    x = sm.add_constant(dta[argu1])
+    mod = PanelOLS(y, x, entity_effects=entity_effects, time_effects=time_effects)
+    results = mod.fit()
+
+    pvalue = results.pvalues
+    coeff = results.params
+    std_err = results.std_errors
+    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
+        "pvalue": pvalue,
+        "coeff": coeff,
+        "std_err": std_err,
+    })
+    res_js = json.loads(res_df.to_json())
+    res_js['time_effect'] = time_effects
+    res_js['entity_effect'] = entity_effects
+    res_js['n'] = dta.shape[0]
+    return {"argu_i": argu2, "Result": res_js}
+def probit_repeat(request: HttpRequest) -> JsonResponse:
+    try:
+        args = request_analyse(request)
+        dta = get_file_data(request)
+        count = args['argu1']['count']
+        probit_args = args['argu1']['argus']
+        probit_result = []
+        argu_il = set(probit_args[0]['argu_i'])
+        argu_el = set(probit_args[0]['argu_e'])
+        for i in range(0, count):
+            probit_result.append(probit(dta,
+                                           probit_args[i]['argu_e'],
+                                           probit_args[i]['argu_i']))
+            argu_il = argu_il.union(probit_args[i]['argu_i'])
+            argu_el = argu_el.union(probit_args[i]['argu_e'])
+        ret_s = {"count": len(probit_result),  # 计数
+                 "OLSList": probit_result,  # 回归结果
+                 "ArgeList": list(argu_el)}  # 参数的并集
+        ret_df = smols2excelV3(ret_s)
+        ret_uid = put_file_excel(ret_df, False)  # 输出索引
+        ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
+        return ret_success(ret_s)
+    except Exception as e:
+        traceback.print_exc()
+        return ret_error(e)
+def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
+    try:
+        args = request_analyse(request)
+        dta = get_file_data(request)
+        count = args['argu1']['count']
+        probit_args = args['argu1']['argus']
+        dta = dta.set_index(args['argu1']['argue'])
+        probit_result = []
+        argu_il = set(probit_args[0]['argu_i'])
+        argu_el = set(probit_args[0]['argu_e'])
+        for i in range(0, count):
+            probit_result.append(effect_probit(dta,
+                                probit_args[i]['argu_e'],
+                                probit_args[i]['argu_i'],
+                                probit_args[i]['entity_effect'],  # 个体固定效应(Bool)
+                                probit_args[i]['time_effect']   # 时间固定效应
+                                ))
+            argu_il = argu_il.union(probit_args[i]['argu_i'])
+            argu_el = argu_el.union(probit_args[i]['argu_e'])
+        ret_s = {"count": len(probit_result),  # 计数
+                 "OLSList": probit_result,  # 被解释变量
+                 "ArgeList": list(argu_el)}  # 参数的并集
+        ret_df = smols2excelV3(ret_s)
+        ret_uid = put_file_excel(ret_df, False)
+        ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
+        return ret_success(ret_s)
+    except Exception as e:
+        traceback.print_exc()
+        return ret_error(e)
+
+

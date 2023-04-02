@@ -27,6 +27,7 @@ from .datac import heter_compare_df
 from .filer import get_file_data,generate_uid,image_path
 from plotnine import *
 from scipy.stats import t,tsem
+import pandas as pd
 
 right="<!--This image is created by computational economics project(CE-API) by Aliebc, Tsinghua University(E-mail:ad_xyz@outlook.com).-->\n"
 
@@ -345,3 +346,58 @@ def plot_advance(request):
         return ret2(-1,None,'Method Not Allowed.')
     else:
         return ret2(-1,None,'Method Not Allowed.')
+
+def box_plot(request):
+    if request.method =='GET':
+        try:
+            dta=get_file_data(request)
+            argu1=request.GET.get('argu1',default=None)
+            title=request.GET.get('title',default=str("Box of "+argu1))
+            width=int(request.GET.get('width',default=12))
+            height=int(request.GET.get('height',default=8))
+        except Exception as e:
+            return ret_error(e)
+        img_box=boxplot(argu1,dta,title)
+        return sav_and_ret_svg(img_box,width,height,request)
+    elif request.method =='POST':
+        ret2(-1,None,'Method Not Allowed.')
+    else:
+        ret2(-1,None,'Method Not Allowed.')
+
+def boxplot(variableName,dataframe,title):
+    """
+    返回单变量的箱线图，variableName指的是需要绘制箱线图的变量，dataframe是包含了需要绘制箱线图变量的DataFrame
+    将会新生成一个数据表，仅用于绘制单变量的箱线图
+    """
+    newDf = pd.DataFrame({variableName:[value for value in dataframe[variableName].to_list()],"xlabel":[variableName for value in dataframe[variableName].to_list()]})
+    return (ggplot(newDf, aes(y=variableName, x="xlabel")) + geom_boxplot() + ggtitle(title) + theme(text=element_text(family='SimHei')))
+
+def multi_box_plot(request):
+    if request.method =='GET':
+        try:
+            dta=get_file_data(request)
+            argu1=request.GET.get('argu1',default=None)
+            argu2 = request.GET.get('argu2', default=None)
+            title=request.GET.get('title',default=str("MultiBoxPlot of "+argu1))
+            width=int(request.GET.get('width',default=12))
+            height=int(request.GET.get('height',default=8))
+        except Exception as e:
+            return ret_error(e)
+        Label_list = [argu1, argu2]
+        img_density=(multiBoxplot(Label_list,dta,title))
+        return sav_and_ret_svg(img_density,width,height,request)
+    elif request.method =='POST':
+        ret2(-1,None,'Method Not Allowed.')
+    else:
+        ret2(-1,None,'Method Not Allowed.')
+
+
+def multiBoxplot(labels, df, title):
+    newDict = {"value": [], "labels": []}
+    for column in labels:
+        newDict["value"] += df[column].to_list()
+        newDict["labels"] += [column for line in df[column].to_list()]
+    newDf = pd.DataFrame(newDict)
+
+    p = ggplot(newDf, aes(x="labels", y="value")) + geom_boxplot() + ggtitle(title) + theme(text=element_text(family='SimHei'))
+    return p
