@@ -86,7 +86,7 @@ urlpatterns = [
     path('probits/', datac.probit_repeat),
     path('logits/', datac.logit_repeat),
     path('probitse/', datac.probit_effect_repeat),
-    path('logitse/', datac.logit_repeat),
+    path('logitse/', datac.logit_effect_repeat),
     path('var_filter/', datac.var_filter),
     ## End this part
 ]

@@ -35,6 +35,7 @@ import traceback
 from .ce import ret2, ret3, request_analyse, ret_error, ret_success
 from .filer import get_file_data, put_file_excel
 from .filer import put_file_all as put_file
+import copy
 
 
 def dcorr(request: HttpRequest) -> JsonResponse:
@@ -962,27 +963,6 @@ def logit(dta, argu1, argu2):
     # print({"argu_i": argu2, "Result": res_js})
     return {"argu_i": argu2, "Result": res_js}
 
-def effect_logit(dta, argu1, argu2, entity_effects, time_effects):
-    label_encoder = preprocessing.LabelEncoder()
-    y = label_encoder.fit_transform(dta[argu2])
-    x = sm.add_constant(dta[argu1])
-    mod = PanelOLS(y, x, entity_effects=entity_effects, time_effects=time_effects)
-    results = mod.fit()
-
-    pvalue = results.pvalues
-    coeff = results.params
-    std_err = results.std_errors
-    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
-        "pvalue": pvalue,
-        "coeff": coeff,
-        "std_err": std_err,
-    })
-    res_js = json.loads(res_df.to_json())
-    res_js['time_effect'] = time_effects
-    res_js['entity_effect'] = entity_effects
-    res_js['n'] = dta.shape[0]
-    return {"argu_i": argu2, "Result": res_js}
-
 def logit_repeat(request: HttpRequest) -> JsonResponse:
     try:
         args = request_analyse(request)
@@ -1015,17 +995,21 @@ def logit_effect_repeat(request: HttpRequest) -> JsonResponse:
         dta = get_file_data(request)
         count = args['argu1']['count']
         logit_args = args['argu1']['argus']
-        dta = dta.set_index(args['argu1']['argue'])
+        # dta = dta.set_index(args['argu1']['argue'])
         logit_result = []
         argu_il = set(logit_args[0]['argu_i'])
         argu_el = set(logit_args[0]['argu_e'])
+        entity = args['argu1']['argue'][0]  # 用户选择的个体变量
+        time = args['argu1']['argue'][1]  # 用户选择的时间变量
         for i in range(0, count):
-            logit_result.append(effect_probit(dta,
-                                               logit_args[i]['argu_e'],
-                                               logit_args[i]['argu_i'],
-                                               logit_args[i]['entity_effect'],  # 个体固定效应(Bool)
-                                               logit_args[i]['time_effect']  # 时间固定效应
-                                               ))
+            logit_result.append(effect_logit(dta,
+                                logit_args[i]['argu_e'],  # 解释变量
+                                logit_args[i]['argu_i'],  # 被解释变量
+                                logit_args[i]['entity_effect'],  # 个体固定效应(Bool)
+                                logit_args[i]['time_effect'],   # 时间固定效应
+                                entity,
+                                time
+                                ))
             argu_il = argu_il.union(logit_args[i]['argu_i'])
             argu_el = argu_el.union(logit_args[i]['argu_e'])
         ret_s = {"count": len(logit_result),  # 计数
@@ -1059,26 +1043,93 @@ def probit(dta, argu1, argu2):
     res_js['n'] = dta.shape[0]
     return {"argu_i": argu2, "Result": res_js}
 
-def effect_probit(dta, argu1, argu2, entity_effects, time_effects):
+def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     label_encoder = preprocessing.LabelEncoder()
+
+    argu1_copy = copy.deepcopy(argu1)
+    if entity_effects != False:
+        entityDummy = pd.get_dummies(dta[entity], prefix=entity, drop_first=True)
+        dta = pd.concat([dta, entityDummy], axis=1)
+        argu1_copy += list(entityDummy.columns)
+    if time_effects != False:
+        timeDummy = pd.get_dummies(dta[time], prefix=time, drop_first=True)
+        dta = pd.concat([dta, timeDummy], axis=1)
+        argu1_copy += list(timeDummy.columns)
+
     y = label_encoder.fit_transform(dta[argu2])
-    x = sm.add_constant(dta[argu1])
-    mod = PanelOLS(y, x, entity_effects=entity_effects, time_effects=time_effects)
-    results = mod.fit()
+    x = sm.add_constant(dta[argu1_copy])
+    model = sm.Probit(y, x)
+    results = model.fit()
 
     pvalue = results.pvalues
     coeff = results.params
-    std_err = results.std_errors
-    res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
+    std_err = results.bse
+    res_df = pd.DataFrame({
         "pvalue": pvalue,
         "coeff": coeff,
         "std_err": std_err,
     })
     res_js = json.loads(res_df.to_json())
-    res_js['time_effect'] = time_effects
-    res_js['entity_effect'] = entity_effects
-    res_js['n'] = dta.shape[0]
-    return {"argu_i": argu2, "Result": res_js}
+    res_final = {'pvalue': {}, 'coeff': {}, 'std_err': {}}
+    target_list = copy.deepcopy(argu1)
+    target_list.append('const')
+    for key in target_list:
+        if not res_js['pvalue'][key] is None:
+            res_final['pvalue'][key] = res_js['pvalue'][key]
+        if not res_js['coeff'][key] is None:
+            res_final['coeff'][key] = res_js['coeff'][key]
+        if not res_js['std_err'][key] is None:
+            res_final['std_err'][key] = res_js['std_err'][key]
+
+    res_final['n'] = dta.shape[0]
+    res_final['time_effect'] = time_effects
+    res_final['entity_effect'] = entity_effects
+    return {"argu_i": argu2, "Result": res_final}
+
+def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
+    label_encoder = preprocessing.LabelEncoder()
+
+    argu1_copy = copy.deepcopy(argu1)
+    if entity_effects != False:
+        entityDummy = pd.get_dummies(dta[entity], prefix=entity, drop_first=True)
+        dta = pd.concat([dta, entityDummy], axis=1)
+        argu1_copy += list(entityDummy.columns)
+    if time_effects != False:
+        timeDummy = pd.get_dummies(dta[time], prefix=time, drop_first=True)
+        dta = pd.concat([dta, timeDummy], axis=1)
+        argu1_copy += list(timeDummy.columns)
+
+    y = label_encoder.fit_transform(dta[argu2])
+    x = sm.add_constant(dta[argu1])
+    model = sm.Logit(y, x)
+    results = model.fit()
+
+    pvalue = results.pvalues
+    coeff = results.params
+    std_err = results.bse
+    res_df = pd.DataFrame({
+        "pvalue": pvalue,
+        "coeff": coeff,
+        "std_err": std_err,
+    })
+    res_js = json.loads(res_df.to_json())
+    res_final = {'pvalue': {}, 'coeff': {}, 'std_err': {}}
+    target_list = copy.deepcopy(argu1)
+    target_list.append('const')
+    for key in target_list:
+        if not res_js['pvalue'][key] is None:
+            res_final['pvalue'][key] = res_js['pvalue'][key]
+        if not res_js['coeff'][key] is None:
+            res_final['coeff'][key] = res_js['coeff'][key]
+        if not res_js['std_err'][key] is None:
+            res_final['std_err'][key] = res_js['std_err'][key]
+
+    res_final['n'] = dta.shape[0]
+    res_final['time_effect'] = time_effects
+    res_final['entity_effect'] = entity_effects
+    return {"argu_i": argu2, "Result": res_final}
+
+
 def probit_repeat(request: HttpRequest) -> JsonResponse:
     try:
         args = request_analyse(request)
@@ -1110,16 +1161,20 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
         dta = get_file_data(request)
         count = args['argu1']['count']
         probit_args = args['argu1']['argus']
-        dta = dta.set_index(args['argu1']['argue'])
+        # dta = dta.set_index(args['argu1']['argue'])
         probit_result = []
         argu_il = set(probit_args[0]['argu_i'])
         argu_el = set(probit_args[0]['argu_e'])
+        entity = args['argu1']['argue'][0]  # 用户选择的个体变量
+        time = args['argu1']['argue'][1]  # 用户选择的时间变量
         for i in range(0, count):
             probit_result.append(effect_probit(dta,
-                                probit_args[i]['argu_e'],
-                                probit_args[i]['argu_i'],
+                                probit_args[i]['argu_e'],  # 解释变量
+                                probit_args[i]['argu_i'],  # 被解释变量
                                 probit_args[i]['entity_effect'],  # 个体固定效应(Bool)
-                                probit_args[i]['time_effect']   # 时间固定效应
+                                probit_args[i]['time_effect'],   # 时间固定效应
+                                entity,
+                                time
                                 ))
             argu_il = argu_il.union(probit_args[i]['argu_i'])
             argu_el = argu_el.union(probit_args[i]['argu_e'])
