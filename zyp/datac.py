@@ -304,7 +304,7 @@ def data_log(request):
         argu1 = xe['argu1']
         f_suffix = xe['f_suffix']
         for label in argu1:
-            dta[label] = dta[label].apply(data2log)
+            dta['ln_' + label] = dta[label].apply(data2log)
 
         uid = put_file(dta, f_suffix)
         return ret_success(
@@ -325,7 +325,7 @@ def winsor_data(request):
         argu1 = xe['argu1']
         f_suffix = xe['f_suffix']
         for label in argu1:
-            dta[label] = winsor(npy.array(dta[label]),1,1)
+            dta['w_' + label] = winsor(npy.array(dta[label]),1,1)
 
         uid = put_file(dta, f_suffix)
         return ret_success(

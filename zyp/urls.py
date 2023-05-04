@@ -69,14 +69,11 @@ urlpatterns = [
     path('getf/',filer.ret_file),
     path('swif/',filer.switch_file_type),
     path('delf/',filer.del_file),
-    ## Andy
     path('ols/',datac.ols),
     path('binary_probit/',datac.binary_probit),
     path('binary_logit/',datac.binary_logit),
-    ## End this part
     path('select_simple/',editr.sql_select_simple),
     path('select_advance/',editr.sql_select_advance),
-    ## Jing Wei Luo
     path('loss_test/', datac.loss_test),
     path('loss_delete/', datac.loss_delete),
     path('data_log/', datac.data_log),
