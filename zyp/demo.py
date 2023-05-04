@@ -5,6 +5,7 @@ import statsmodels.api as sm
 import json
 import traceback
 import copy
+import sys
 
 
 def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
@@ -152,6 +153,20 @@ def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     res_final['entity_effect'] = entity_effects
     return {"argu_i": argu2, "Result": res_final}
 
+def loss_delete(dta, argues) -> pd.DataFrame:
+    data = []
+    argues = set(argues)
+    for x in dta.index:
+        flag = 0
+        for y in argues:
+            if (pd.isnull(dta.loc[x, y]) or dta.loc[x, y] == ' '):
+                flag = flag + 1
+                break
+        if flag == 0:
+            data.append(dta.loc[x])
+    result_df = pd.DataFrame(data)
+    return result_df
+
 if __name__ == '__main__':
     args = {
         'argu1':{
@@ -159,7 +174,7 @@ if __name__ == '__main__':
             'argue':['地区', '年份'],
             'argus':[
                 {
-                    'argu_e': ['农村居民人均可支配收入/元'],
+                    'argu_e': ['全体居民人均可支配收入/元'],
                     'argu_i': '测试变量',
                     'entity_effect': True,
                     'time_effect': True
@@ -181,6 +196,15 @@ if __name__ == '__main__':
     argu_el = set(probit_args[0]['argu_e'])
     entity = args['argu1']['argue'][0]  # 用户选择的个体变量
     time = args['argu1']['argue'][1]  # 用户选择的时间变量
+
+    # 缺失值删减
+    temp = [entity, time]
+    for i in range(0, count):
+        for j in probit_args[i]['argu_e']:
+            temp.append(j)
+        temp.append(probit_args[i]['argu_i'])
+    dta = loss_delete(dta, temp)
+
     for i in range(0, count):
         probit_result.append(effect_logit(dta,
                                            probit_args[i]['argu_e'],  # 解释变量

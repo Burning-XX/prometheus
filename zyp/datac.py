@@ -34,9 +34,9 @@ import re
 import traceback
 from .ce import ret2, ret3, request_analyse, ret_error, ret_success
 from .filer import get_file_data, put_file_excel
+from .filer import argues_loss_delete
 from .filer import put_file_all as put_file
 import copy
-
 
 def dcorr(request: HttpRequest) -> JsonResponse:
     """
@@ -82,6 +82,8 @@ def xcorr_safe(request: HttpRequest) -> JsonResponse:
         dta = get_file_data(request)
         args = request_analyse(request)
         cord = args['argu1']
+        # 针对操作的变量, 进行缺失值删减
+        dta = argues_loss_delete(dta, cord)
         ret = xcorr_single(dta, cord)
     except Exception as e:
         traceback.print_exc()
@@ -294,7 +296,7 @@ def data2log(data):
     """
     ln = npy.log(1+data)
     if not ln>=0:
-        return "负数无法对数化"
+        return ''
     else:
         return ln
 def data_log(request):
@@ -995,12 +997,20 @@ def logit_effect_repeat(request: HttpRequest) -> JsonResponse:
         dta = get_file_data(request)
         count = args['argu1']['count']
         logit_args = args['argu1']['argus']
-        # dta = dta.set_index(args['argu1']['argue'])
         logit_result = []
         argu_il = set(logit_args[0]['argu_i'])
         argu_el = set(logit_args[0]['argu_e'])
         entity = args['argu1']['argue'][0]  # 用户选择的个体变量
         time = args['argu1']['argue'][1]  # 用户选择的时间变量
+
+        # 针对操作的变量, 进行缺失值删减
+        temp = [entity, time]
+        for i in range(0, count):
+            for j in logit_args[i]['argu_e']:
+                temp.append(j)
+            temp.append(logit_args[i]['argu_i'])
+        dta = argues_loss_delete(dta, temp)
+
         for i in range(0, count):
             logit_result.append(effect_logit(dta,
                                 logit_args[i]['argu_e'],  # 解释变量
@@ -1161,12 +1171,20 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
         dta = get_file_data(request)
         count = args['argu1']['count']
         probit_args = args['argu1']['argus']
-        # dta = dta.set_index(args['argu1']['argue'])
         probit_result = []
         argu_il = set(probit_args[0]['argu_i'])
         argu_el = set(probit_args[0]['argu_e'])
         entity = args['argu1']['argue'][0]  # 用户选择的个体变量
         time = args['argu1']['argue'][1]  # 用户选择的时间变量
+
+        # 针对操作的变量, 进行缺失值删减
+        temp = [entity, time]
+        for i in range(0, count):
+            for j in probit_args[i]['argu_e']:
+                temp.append(j)
+            temp.append(probit_args[i]['argu_i'])
+        dta = argues_loss_delete(dta, temp)
+
         for i in range(0, count):
             probit_result.append(effect_probit(dta,
                                 probit_args[i]['argu_e'],  # 解释变量
