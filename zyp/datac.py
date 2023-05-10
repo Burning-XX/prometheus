@@ -73,6 +73,24 @@ def xcorr_single(
                 ret[i][j] = [1, 0]  # 防止精度问题出现(0.9999...)
     return ret
 
+def correlation(name1, name2, cor, pvalue):  # cor是两个变量之间的相关性系数，pvalue是这个相关性系数是否显著
+    if pvalue > 0.1:
+        return f"{name1}与{name2}之间不存在显著的相关性，二者之间的关系可能需要进一步检验"
+    else:
+        if abs(cor) >= 0.7:
+            return f"{name1}与{name2}之间存在显著的相关性，相关系数是{cor}，可以认为这两个变量之间存在强相关性"
+        else:
+            return f"{name1}与{name2}之间存在显著的相关性，相关系数是{cor}，可以认为二者之间的相关性较低，如果从理论上，这个变量对被解释变量有重要的作用，那么在回归时，可以加入这个变量。"
+
+
+def describe_correlation(name1, name2, cor, pvalue):
+    if name1 == name2:  # 如果是同一个变量，就不用分析了
+        return ""
+    if cor > 0:
+        return f"{correlation(name1, name2, cor, pvalue)}这两个变量是正相关的，但是，二者之间的正相关性，并不能被解释为因果关系,二者的关系可能被遗漏变量、测量误差以及反向因果所干扰，因此，因果关系的检验还需要进一步的研究。"
+    else:
+        return f"{correlation(name1, name2, cor, pvalue)}这两个变量是正相关的，但是，二者之间的负相关性，并不能被解释为因果关系,二者的关系可能被遗漏变量、测量误差以及反向因果所干扰，因此，因果关系的检验还需要进一步的研究。"
+
 
 def xcorr_safe(request: HttpRequest) -> JsonResponse:
     """
@@ -85,10 +103,19 @@ def xcorr_safe(request: HttpRequest) -> JsonResponse:
         # 针对操作的变量, 进行缺失值删减
         dta = argues_loss_delete(dta, cord)
         ret = xcorr_single(dta, cord)
+        # 组织描述性文案
+        desc = ''
+        for i in range(len(cord)):
+            for j in range(i + 1, len(cord)):
+                v1 = cord.__getitem__(i)
+                v2 = cord.__getitem__(j)
+                corr = ret[v1][v2].correlation
+                pvalue = ret[v1][v2].pvalue
+                desc = desc + describe_correlation(v1, v2, corr, pvalue) + '<br/>'
     except Exception as e:
         traceback.print_exc()
         return ret_error(e)
-    return ret2(0, {"CorrMartix": ret}, None)
+    return ret2(0, {"CorrMartix": ret, "Desc": desc}, None)
 
 
 def dtype(request: HttpRequest) -> JsonResponse:
@@ -171,18 +198,44 @@ def xsummary3(request: HttpRequest) -> JsonResponse:
         df2 = pd.read_json(json.dumps(a2), orient="index")
         uid = put_file_excel(df2, True, "Variable")
         result = []
+        desc = ''
         result.append(['变量名', 'count', 'mean', 'std', 'min', 'max', '25%', '50%', '75%', 'skew', 'kurt'])
         for key in argu1:
             if a2.__contains__(key):
-                result.append(
-                    [key, a2[key]['count'], a2[key]['mean'], a2[key]['std'], a2[key]['min'], a2[key]['max'],
-                     a2[key]['25%'],
-                     a2[key]['50%'], a2[key]['75%'], a2[key]['skew'], a2[key]['kurt']])
-        return ret_success({'ValueList': result, 'File': {'uid': uid, 'f_suffix': '.xlsx'}})
+                count = a2[key]['count']
+                mean = a2[key]['mean']
+                std = a2[key]['std']
+                min = a2[key]['min']
+                max = a2[key]['max']
+                q1 = a2[key]['25%']
+                q2 = a2[key]['50%']
+                q3 = a2[key]['75%']
+                skew = a2[key]['skew']
+                kurt = a2[key]['kurt']
+                result.append([key, count, mean, std, min, max, q1, q2, q3, skew, kurt])
+                desc = desc + describe_variable(key, count, mean, std, max, min, q1, q2, q3, kurt, skew) + '<br/>'
+        return ret_success({'ValueList': result, 'File': {'uid': uid, 'f_suffix': '.xlsx'}, 'Desc':desc})
     except Exception as e:
         traceback.print_exc()
         return ret_error(e)
 
+def mean2median(mean, Q2, Std):  # 返回关于中心趋势的建议，这里判断一个变量是否存在极端值的标准是：均值是否偏离中位数超过两个标准差，这是一个经验数值，可以调整
+    if abs((mean - Q2) / Std) >= 2:
+        return "均值偏离中位数超过两个标准差，均值可能收到极端值的影响，明显偏离了中位数，需要进一步检查是否存在异常值,包括检查直方图，是否存在偏离正常值较远的异常数据点，或者箱线图，是否存在超过上下四分位数1.5倍以上的异常值，如果存在，可以考虑缩尾处理。"
+    else:
+        return "均值和中位数相差没有超过两个标准差，变量分布较为对称，没有明显偏斜，可能不存在大量极端值，变量分布偏向于正态分布，可以进一步进行统计分析。"
+
+def skewness(skew):  # 返回关于偏斜的建议，这里判断变量是否有偏斜的标准是偏斜度
+    if skew >= 0.5:
+        return "如果一个偏斜度越接近于0，说明该变量越接近于正态分布。在本例中，该变量偏斜度超过0.5，存在一定的偏斜，数据分布呈现右偏，即尾部向右侧延伸，右侧存在较多极端值。"
+    if skew <= -0.5:
+        return "如果一个偏斜度越接近于0，说明该变量越接近于正态分布。在本例中，该变量偏斜度小于-0.5，存在一定的偏斜，数据分布呈现左偏，即尾部向左侧延伸，左侧存在较多极端值。"
+    else:
+        return "变量的偏斜度绝对值小于0.5，可以认为接近于正态分布。"
+
+# mean2median以及skewness这两个函数将会被descirbe_variable这个函数调用，只需要把上两个函数放在代码中即可，describe_variable将会返回单个变量的描述文本
+def describe_variable(varName, N, Mean, Std, Max, Min, Q1, Q2, Q3, kurt, skew):
+    return (f"变量{varName}的观测数量是{N}个，均值是{Mean}，标准差是{Std}，最大值是{Max}，最小值是{Min}，25%分位数是{Q1}，50%分位数是{Q2}，75%分位数是{Q3}，峰度是{kurt},偏斜度是{skew}。从描述性统计来看，{mean2median(Mean, Q2, Std)}{skewness(skew)}")
 
 def deal_with_pairs(pairs):
     data = dict(pairs)
@@ -869,6 +922,11 @@ def smols2excelV3(ols_res_dict: dict) -> pd.DataFrame:
                 column.append(ols_res_dict['OLSList'][i]['Result']['time_effect'])
             first_column_append(first_column, i, "观测值")
             column.append(str(ols_res_dict['OLSList'][i]['Result']['n']))
+            first_column_append(first_column, i, "R^2")
+            column.append(ols_res_dict['OLSList'][i]['Result']['r2'])
+            first_column_append(first_column, i, "Likelihood")
+            column.append(ols_res_dict['OLSList'][i]['Result']['LogLikelihood'])
+
             if i == 0:
                 ret_list.append(first_column)
             ret_list.append(column)
@@ -1039,6 +1097,8 @@ def probit(dta, argu1, argu2):
     x = sm.add_constant(dta[argu1])
     model = sm.Probit(y, x)
     results = model.fit()
+    PseudoR2 = re.findall("Pseudo R-squ.*", str(results.summary()))[0].split(" ")[-1]
+    LogLikelihood = re.findall("Log-Likelihood:.*", str(results.summary()))[0].split(" ")[-1]
 
     pvalue = results.pvalues
     coeff = results.params
@@ -1051,6 +1111,8 @@ def probit(dta, argu1, argu2):
     })
     res_js = json.loads(res_df.to_json())
     res_js['n'] = dta.shape[0]
+    res_js['LogLikelihood'] = LogLikelihood
+    res_js['r2'] = PseudoR2
     return {"argu_i": argu2, "Result": res_js}
 
 def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
@@ -1071,6 +1133,8 @@ def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time)
     model = sm.Probit(y, x)
     results = model.fit()
 
+    PseudoR2 = re.findall("Pseudo R-squ.*", str(results.summary()))[0].split(" ")[-1]
+    LogLikelihood = re.findall("Log-Likelihood:.*", str(results.summary()))[0].split(" ")[-1]
     pvalue = results.pvalues
     coeff = results.params
     std_err = results.bse
@@ -1094,6 +1158,8 @@ def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time)
     res_final['n'] = dta.shape[0]
     res_final['time_effect'] = time_effects
     res_final['entity_effect'] = entity_effects
+    res_final['LogLikelihood'] = LogLikelihood
+    res_final['r2'] = PseudoR2
     return {"argu_i": argu2, "Result": res_final}
 
 def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
@@ -1149,6 +1215,15 @@ def probit_repeat(request: HttpRequest) -> JsonResponse:
         probit_result = []
         argu_il = set(probit_args[0]['argu_i'])
         argu_el = set(probit_args[0]['argu_e'])
+
+        # 针对操作的变量, 进行缺失值删减
+        temp = []
+        for i in range(0, count):
+            for j in probit_args[i]['argu_e']:
+                temp.append(j)
+            temp.append(probit_args[i]['argu_i'])
+        dta = argues_loss_delete(dta, temp)
+
         for i in range(0, count):
             probit_result.append(probit(dta,
                                            probit_args[i]['argu_e'],
