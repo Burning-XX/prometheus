@@ -746,6 +746,7 @@ def var_filter(request):
 ## End this part
 
 def ols_plain_inter(df, argu_i, argu_e):
+    argu_e_param = argu_e
     argu_e = sm.add_constant(df[argu_e])
     mod = sm.OLS(df[argu_i], argu_e)
     results = mod.fit()
@@ -761,10 +762,17 @@ def ols_plain_inter(df, argu_i, argu_e):
     res_js = json.loads(res_df.to_json())
     res_js['n'] = df.shape[0]
     res_js['r2'] = r2
-    return {"argu_i": argu_i, "Result": res_js}
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "OLS"
+    coef = res_js['coeff'][argu_e_param[0]]
+    p = res_js['pvalue'][argu_e_param[0]]
+    desc = regResult(argu_i, argu_e_param[0], regType, coef, p)
+
+    return {"argu_i": argu_i, "Result": res_js, 'desc': desc}
 
 
 def ols_effect_inter(df, argu_i, argu_e, entity_effects, time_effects):
+    argu_e_param = argu_e
     argu_e = sm.add_constant(df[argu_e])
     mod = PanelOLS(df[argu_i], argu_e, entity_effects=entity_effects, time_effects=time_effects)
     results = mod.fit()
@@ -782,7 +790,12 @@ def ols_effect_inter(df, argu_i, argu_e, entity_effects, time_effects):
     res_js['time_effect'] = time_effects
     res_js['entity_effect'] = entity_effects
     res_js['r2'] = r2
-    return {"argu_i": argu_i, "Result": res_js}
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "OLS"
+    coef = res_js['coeff'][argu_e_param[0]]
+    p = res_js['pvalue'][argu_e_param[0]]
+    desc = regResult(argu_i, argu_e_param[0], regType, coef, p)
+    return {"argu_i": argu_i, "Result": res_js, "desc": desc}
 
 
 def g_p_str(pval) -> str:
@@ -959,9 +972,16 @@ def ols_effect_repeat(request: HttpRequest) -> JsonResponse:
                                             olss[i]['time_effect']))  # 时间固定效应(Bool)
             argu_il = argu_il.union(olss[i]['argu_i'])
             argu_el = argu_el.union(olss[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in ols_res:
+            desc = desc + val['desc'] + '<br/>'
+
         ret_s = {"count": len(ols_res),  # 计数
                  "OLSList": ols_res,  # 被解释变量
-                 "ArgeList": list(argu_el)}  # 参数的并集
+                 "ArgeList": list(argu_el),
+                 "Desc": desc}
         ret_df = smols2excelV2(ret_s)
         ret_uid = put_file_excel(ret_df, False)
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
@@ -983,16 +1003,31 @@ def ols_repeat(request: HttpRequest) -> JsonResponse:
         ols_res = []
         argu_il = set(olss[0]['argu_i'])
         argu_el = set(olss[0]['argu_e'])
+
+        # 缺失值删减
+        temp = []
+        for i in range(0, count):
+            for j in olss[i]['argu_e']:
+                temp.append(j)
+            temp.append(olss[i]['argu_i'])
+        dta = argues_loss_delete(dta, temp)
+
         for i in range(0, count):
             ols_res.append(ols_plain_inter(dta,
                                            olss[i]['argu_i'],  # 被解释变量
                                            olss[i]['argu_e']))  # 解释变量
             argu_il = argu_il.union(olss[i]['argu_i'])
             argu_el = argu_el.union(olss[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in ols_res:
+            desc = desc + val['desc'] + '<br/>'
+
         ret_s = {"count": len(ols_res),  # 计数
                  "OLSList": ols_res,  # 回归结果
-                 "ArgeList": list(argu_el)}  # 参数的并集
-        # ret_df = smols2excel(ret_s)
+                 "ArgeList": list(argu_el),
+                 "Desc": desc}
         ret_df = smols2excelV2(ret_s)
         ret_uid = put_file_excel(ret_df, False)  # 输出索引
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
@@ -1007,11 +1042,12 @@ def logit(dta, argu1, argu2):
     x = sm.add_constant(dta[argu1])
     model = sm.Logit(y, x)
     results = model.fit()
+    PseudoR2 = re.findall("Pseudo R-squ.*", str(results.summary()))[0].split(" ")[-1]
+    LogLikelihood = re.findall("Log-Likelihood:.*", str(results.summary()))[0].split(" ")[-1]
 
     pvalue = results.pvalues
     coeff = results.params
     std_err = results.bse
-    #r2 = results.rsquared
     res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
         "pvalue": pvalue,
         "coeff": coeff,
@@ -1019,8 +1055,8 @@ def logit(dta, argu1, argu2):
     })
     res_js = json.loads(res_df.to_json())
     res_js['n'] = dta.shape[0]
-    #res_js['r2'] = r2
-    # print({"argu_i": argu2, "Result": res_js})
+    res_js['LogLikelihood'] = LogLikelihood
+    res_js['r2'] = PseudoR2
     return {"argu_i": argu2, "Result": res_js}
 
 def logit_repeat(request: HttpRequest) -> JsonResponse:
@@ -1032,6 +1068,15 @@ def logit_repeat(request: HttpRequest) -> JsonResponse:
         logit_result = []
         argu_il = set(logit_args[0]['argu_i'])
         argu_el = set(logit_args[0]['argu_e'])
+
+        # 针对操作的变量, 进行缺失值删减
+        temp = []
+        for i in range(0, count):
+            for j in logit_args[i]['argu_e']:
+                temp.append(j)
+            temp.append(logit_args[i]['argu_i'])
+        dta = argues_loss_delete(dta, temp)
+
         for i in range(0, count):
             logit_result.append(logit(dta,
                                            logit_args[i]['argu_e'],
@@ -1179,6 +1224,8 @@ def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     x = sm.add_constant(dta[argu1])
     model = sm.Logit(y, x)
     results = model.fit()
+    PseudoR2 = re.findall("Pseudo R-squ.*", str(results.summary()))[0].split(" ")[-1]
+    LogLikelihood = re.findall("Log-Likelihood:.*", str(results.summary()))[0].split(" ")[-1]
 
     pvalue = results.pvalues
     coeff = results.params
@@ -1203,6 +1250,8 @@ def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     res_final['n'] = dta.shape[0]
     res_final['time_effect'] = time_effects
     res_final['entity_effect'] = entity_effects
+    res_final['LogLikelihood'] = LogLikelihood
+    res_final['r2'] = PseudoR2
     return {"argu_i": argu2, "Result": res_final}
 
 
@@ -1282,4 +1331,22 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
         traceback.print_exc()
         return ret_error(e)
 
+def regResult(Y_Name, X_Name, regType, coef, p):
+    base =  f"{regType}的回归结果显示，{X_Name}与{Y_Name}的相关性系数是{coef}，对应的P值是{p}"
+    if p > 0.1:
+        significant = "不显著"
+    elif 0.05 < p <= 0.1:
+        significant = "在10%的显著性水平上显著"
+    elif 0.01 < p <= 0.05:
+        significant = "在5%的显著性水平上显著"
+    else:
+        significant = "在1%的显著性水平上显著"
 
+    if coef > 0:
+        corr = "正相关"
+    elif coef < 0:
+        corr = "负相关"
+    else:
+        corr = "不存在明显的影响"
+
+    return f"{base},{corr},{significant}，但是，如果没有将可能影响Y的重要变量加以控制，则可能有遗漏变量的问题，导致核心解释变量系数存在内生性，建议参考已有对Y的研究，将相关控制变量加入回归，以解决遗漏变量问题，此外，还应该考虑核心解释变量有没有可能被Y所影响，如果有可能，则可能存在反向因果，可以考虑工具变量回归或者准自然实验的方法来解决这一问题。"
