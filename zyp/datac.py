@@ -1057,7 +1057,13 @@ def logit(dta, argu1, argu2):
     res_js['n'] = dta.shape[0]
     res_js['LogLikelihood'] = LogLikelihood
     res_js['r2'] = PseudoR2
-    return {"argu_i": argu2, "Result": res_js}
+
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "Logit"
+    coef = res_js['coeff'][argu1[0]]
+    p = res_js['pvalue'][argu1[0]]
+    desc = regResult(argu2, argu1[0], regType, coef, p)
+    return {"argu_i": argu2, "Result": res_js, "desc": desc}
 
 def logit_repeat(request: HttpRequest) -> JsonResponse:
     try:
@@ -1083,9 +1089,17 @@ def logit_repeat(request: HttpRequest) -> JsonResponse:
                                            logit_args[i]['argu_i']))
             argu_il = argu_il.union(logit_args[i]['argu_i'])
             argu_el = argu_el.union(logit_args[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in logit_result:
+            desc = desc + val['desc'] + '<br/>'
+
         ret_s = {"count": len(logit_result),  # 计数
                  "OLSList": logit_result,  # 回归结果
-                 "ArgeList": list(argu_el)}  # 参数的并集
+                 "ArgeList": list(argu_el),  # 参数的并集
+                 "Desc": desc
+                 }
         ret_df = smols2excelV3(ret_s)
         ret_uid = put_file_excel(ret_df, False)  # 输出索引
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
@@ -1125,9 +1139,17 @@ def logit_effect_repeat(request: HttpRequest) -> JsonResponse:
                                 ))
             argu_il = argu_il.union(logit_args[i]['argu_i'])
             argu_el = argu_el.union(logit_args[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in logit_result:
+            desc = desc + val['desc'] + '<br/>'
+
         ret_s = {"count": len(logit_result),  # 计数
                  "OLSList": logit_result,  # 被解释变量
-                 "ArgeList": list(argu_el)}  # 参数的并集
+                 "ArgeList": list(argu_el),  # 参数的并集
+                 "Desc": desc
+                 }
         ret_df = smols2excelV3(ret_s)
         ret_uid = put_file_excel(ret_df, False)
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
@@ -1263,7 +1285,13 @@ def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     res_final['entity_effect'] = entity_effects
     res_final['LogLikelihood'] = LogLikelihood
     res_final['r2'] = PseudoR2
-    return {"argu_i": argu2, "Result": res_final}
+
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "Logit"
+    coef = res_js['coeff'][argu1[0]]
+    p = res_js['pvalue'][argu1[0]]
+    desc = regResult(argu2, argu1[0], regType, coef, p)
+    return {"argu_i": argu2, "Result": res_final, "desc": desc}
 
 
 def probit_repeat(request: HttpRequest) -> JsonResponse:
@@ -1357,6 +1385,8 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
         return ret_error(e)
 
 def regResult(Y_Name, X_Name, regType, coef, p):
+    if ((coef == None) or (p == None)) :
+        return ""
     base =  f"{regType}的回归结果显示，{X_Name}与{Y_Name}的相关性系数是{coef}，对应的P值是{p}"
     if p > 0.1:
         significant = "不显著"
