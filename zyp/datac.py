@@ -1148,7 +1148,6 @@ def probit(dta, argu1, argu2):
     pvalue = results.pvalues
     coeff = results.params
     std_err = results.bse
-    # r2 = results.rsquared
     res_df = pd.DataFrame({  # 从回归结果中提取需要的结果
         "pvalue": pvalue,
         "coeff": coeff,
@@ -1158,7 +1157,13 @@ def probit(dta, argu1, argu2):
     res_js['n'] = dta.shape[0]
     res_js['LogLikelihood'] = LogLikelihood
     res_js['r2'] = PseudoR2
-    return {"argu_i": argu2, "Result": res_js}
+
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "Probit"
+    coef = res_js['coeff'][argu1[0]]
+    p = res_js['pvalue'][argu1[0]]
+    desc = regResult(argu2, argu1[0], regType, coef, p)
+    return {"argu_i": argu2, "Result": res_js, "desc": desc}
 
 def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     label_encoder = preprocessing.LabelEncoder()
@@ -1205,7 +1210,13 @@ def effect_probit(dta, argu1, argu2, entity_effects, time_effects, entity, time)
     res_final['entity_effect'] = entity_effects
     res_final['LogLikelihood'] = LogLikelihood
     res_final['r2'] = PseudoR2
-    return {"argu_i": argu2, "Result": res_final}
+
+    # 生成解释变量和被解释变量之间的回归文案
+    regType = "Probit"
+    coef = res_js['coeff'][argu1[0]]
+    p = res_js['pvalue'][argu1[0]]
+    desc = regResult(argu2, argu1[0], regType, coef, p)
+    return {"argu_i": argu2, "Result": res_final, "desc": desc}
 
 def effect_logit(dta, argu1, argu2, entity_effects, time_effects, entity, time):
     label_encoder = preprocessing.LabelEncoder()
@@ -1279,9 +1290,17 @@ def probit_repeat(request: HttpRequest) -> JsonResponse:
                                            probit_args[i]['argu_i']))
             argu_il = argu_il.union(probit_args[i]['argu_i'])
             argu_el = argu_el.union(probit_args[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in probit_result:
+            desc = desc + val['desc'] + '<br/>'
+
         ret_s = {"count": len(probit_result),  # 计数
                  "OLSList": probit_result,  # 回归结果
-                 "ArgeList": list(argu_el)}  # 参数的并集
+                 "ArgeList": list(argu_el),  # 参数的并集
+                 "Desc": desc
+                 }
         ret_df = smols2excelV3(ret_s)
         ret_uid = put_file_excel(ret_df, False)  # 输出索引
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}  # 文件列表
@@ -1320,9 +1339,15 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
                                 ))
             argu_il = argu_il.union(probit_args[i]['argu_i'])
             argu_el = argu_el.union(probit_args[i]['argu_e'])
+
+        # 解释变量与被解释变量之间的回归分析文案
+        desc = ''
+        for val in probit_result:
+            desc = desc + val['desc'] + '<br/>'
         ret_s = {"count": len(probit_result),  # 计数
                  "OLSList": probit_result,  # 被解释变量
-                 "ArgeList": list(argu_el)}  # 参数的并集
+                 "ArgeList": list(argu_el),  # 参数的并集
+                 "Desc": desc}
         ret_df = smols2excelV3(ret_s)
         ret_uid = put_file_excel(ret_df, False)
         ret_s['File'] = {"uid": ret_uid, "f_suffix": ".xlsx"}
