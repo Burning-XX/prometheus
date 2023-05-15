@@ -75,12 +75,12 @@ def xcorr_single(
 
 def correlation(name1, name2, cor, pvalue):  # cor是两个变量之间的相关性系数，pvalue是这个相关性系数是否显著
     if pvalue > 0.1:
-        return f"{name1}与{name2}之间不存在显著的相关性，二者之间的关系可能需要进一步检验"
+        return f"[{name1}]与[{name2}]之间不存在显著的相关性，二者之间的关系可能需要进一步检验。"
     else:
         if abs(cor) >= 0.7:
-            return f"{name1}与{name2}之间存在显著的相关性，相关系数是{cor}，可以认为这两个变量之间存在强相关性"
+            return f"[{name1}]与[{name2}]之间存在显著的相关性，相关系数是{'%.3f' % cor}，可以认为这两个变量之间存在强相关性。"
         else:
-            return f"{name1}与{name2}之间存在显著的相关性，相关系数是{cor}，可以认为二者之间的相关性较低，如果从理论上，这个变量对被解释变量有重要的作用，那么在回归时，可以加入这个变量。"
+            return f"[{name1}]与[{name2}]之间存在显著的相关性，相关系数是{'%.3f' % cor}，可以认为二者之间的相关性较低，如果从理论上，这个变量对被解释变量有重要的作用，那么在回归时，可以加入这个变量。"
 
 
 def describe_correlation(name1, name2, cor, pvalue):
@@ -235,7 +235,7 @@ def skewness(skew):  # 返回关于偏斜的建议，这里判断变量是否有
 
 # mean2median以及skewness这两个函数将会被descirbe_variable这个函数调用，只需要把上两个函数放在代码中即可，describe_variable将会返回单个变量的描述文本
 def describe_variable(varName, N, Mean, Std, Max, Min, Q1, Q2, Q3, kurt, skew):
-    return (f"变量{varName}的观测数量是{N}个，均值是{Mean}，标准差是{Std}，最大值是{Max}，最小值是{Min}，25%分位数是{Q1}，50%分位数是{Q2}，75%分位数是{Q3}，峰度是{kurt},偏斜度是{skew}。从描述性统计来看，{mean2median(Mean, Q2, Std)}{skewness(skew)}")
+    return (f"变量[{varName}]的观测数量是{N}个，均值是{'%.3f' % Mean}，标准差是{'%.3f' % Std}，最大值是{'%.3f' % Max}，最小值是{'%.3f' % Min}，25%分位数是{'%.3f' % Q1}，50%分位数是{'%.3f' % Q2}，75%分位数是{'%.3f' % Q3}，峰度是{'%.3f' % kurt},偏斜度是{'%.3f' % skew}。从描述性统计来看，{mean2median(Mean, Q2, Std)}{skewness(skew)}")
 
 def deal_with_pairs(pairs):
     data = dict(pairs)
@@ -1387,7 +1387,7 @@ def probit_effect_repeat(request: HttpRequest) -> JsonResponse:
 def regResult(Y_Name, X_Name, regType, coef, p):
     if ((coef == None) or (p == None)) :
         return ""
-    base =  f"{regType}的回归结果显示，{X_Name}与{Y_Name}的相关性系数是{coef}，对应的P值是{p}"
+    base =  f"{regType}的回归结果显示，[{X_Name}]与[{Y_Name}]的相关性系数是{'%.3f' % coef}，对应的P值是{'%.3f' % p}。"
     if p > 0.1:
         significant = "不显著"
     elif 0.05 < p <= 0.1:
